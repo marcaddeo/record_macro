@@ -5,4 +5,6 @@ edition = "2021"
 
 [dependencies]
 defile = "0.2.1"
+diesel = { version = "2.2.4", features = ["returning_clauses_for_sqlite_3_35", "sqlite"] }
+diesel-async = { version = "0.5.1", features = ["deadpool", "pool", "sqlite"] }
 paste = "1.0.15"

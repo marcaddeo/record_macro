@@ -1,76 +1,105 @@
-#![feature(trace_macros)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-trace_macros!(true);
+pub extern crate defile;
+pub extern crate paste;
 
-use defile::defile;
-use paste::paste;
-
-struct Zomg<T>(T);
+pub struct Related<T>(T);
 
 #[macro_export]
 macro_rules! zomg {
-    // Done, generate struct.
-    (@new_record () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
-        paste! {
-            $pub struct [<New $name Record>]<'a> {
-                $($field : $type),*
-            }
-        }
+    // Main entrypoint.
+    ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
+        $crate::zomg_record!($(#[$attr])* $pub $name ($($fields)*));
+        $crate::zomg_model!($pub $name ($($fields)*));
+        $crate::zomg_impl!($name ($($fields)*));
     };
+}
 
-    // Convert String fields to &'a str.
-    (@new_record ($field:ident : String $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        zomg!(@new_record ($($($rest)*)?) -> { $($output)* ($field : &'a str) });
-    };
-
-    // Remove id field.
-    (@new_record (id : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        zomg!(@new_record ($($($rest)*)?) -> { $($output)* });
-    };
-
-    // Iterate over struct fields.
-    (@new_record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        defile! {
-            zomg!(@@new_record ($($($rest)*)?) -> { $($output)* ($field : $type) });
-        }
-    };
-
-    // NewRecord entrypoint.
-    (@new_record $pub:vis $name:ident ($($rest:tt)*)) => {
-        zomg!(@new_record ($($rest)*) -> { $pub $name });
-    };
-
+#[macro_export]
+macro_rules! zomg_record {
     // Done, generate struct.
     (@record () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
-        paste! {
+        $crate::paste::paste! {
             $(#[$attr])*
             $pub struct [<$name Record>] {
                 $($field : $type),*
             }
         }
 
-        zomg!(@new_record $pub $name ($($field : $type),*));
+        $crate::zomg_new_record!($pub $name ($($field : $type),*));
     };
 
     // Replace relation fields with foreign key.
-    (@record ($field:ident : Zomg<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        paste! {
-            zomg!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) });
+    (@record ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        $crate::paste::paste! {
+            $crate::zomg_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) });
         }
     };
 
     // Iterate over struct fields.
     (@record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        zomg!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        $crate::zomg_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
-    // Record entrypoint.
-    (@record $(#[$attr:meta])* $pub:vis $name:ident ($($rest:tt)*)) => {
-        zomg!(@record ($($rest)*) -> { $(#[$attr])* $pub $name });
+    // Entrypoint.
+    ($(#[$attr:meta])* $pub:vis $name:ident ($($rest:tt)*)) => {
+        $crate::zomg_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $name });
+    };
+}
+
+#[macro_export]
+macro_rules! zomg_new_record {
+    // Done, generate struct and generate new_record associated function for model.
+    (@new_record () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
+        $crate::paste::paste! {
+            #[derive(Debug)]
+            $pub struct [<New $name Record>]<'a> {
+                $($field : $type,)*
+            }
+        }
+
+        impl $name {
+            $crate::paste::paste! {
+                pub fn new_record<'a>($($field : $type),*) -> [<New $name Record>]<'a> {
+                    [<New $name Record>] {
+                        $($field,)*
+                    }
+                }
+            }
+        }
     };
 
+    // @TODO handle other owned types.
+    // Convert String fields to &'a str.
+    (@new_record ($field:ident : String $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        $crate::defile::defile! {
+            $crate::zomg_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) });
+        }
+    };
+
+    // Remove id field.
+    (@new_record (id : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        $crate::defile::defile! {
+            $crate::zomg_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* });
+        }
+    };
+
+    // Iterate over struct fields.
+    (@new_record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        $crate::defile::defile! {
+            $crate::zomg_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) });
+        }
+    };
+
+    // NewRecord entrypoint.
+    ($pub:vis $name:ident ($($rest:tt)*)) => {
+        $crate::zomg_new_record!(@new_record ($($rest)*) -> { $pub $name });
+    };
+}
+
+#[macro_export]
+macro_rules! zomg_model {
     // Done, generate struct.
     (@model () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
         $pub struct $name {
@@ -79,120 +108,63 @@ macro_rules! zomg {
     };
 
     // Strip out relation marker.
-    (@model ($field:ident : Zomg<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        zomg!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+    (@model ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        $crate::zomg_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Iterate over struct fields.
     (@model ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        zomg!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        $crate::zomg_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
-    // Model entrypoint.
-    (@model $pub:vis $name:ident ($($rest:tt)*)) => {
-        zomg!(@model ($($rest)*) -> { $pub $name });
-    };
-
-    // Main entrypoint.
-    ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
-        zomg!(@model $pub $name ($($fields)*));
-        zomg!(@record $(#[$attr])* $pub $name ($($fields)*));
+    // Entrypoint.
+    ($pub:vis $name:ident ($($rest:tt)*)) => {
+        $crate::zomg_model!(@model ($($rest)*) -> { $pub $name });
     };
 }
 
-zomg!(
-    #[derive(Debug)]
-    pub struct Comment {
-        some_post: Zomg<Post>,
-        id: i32,
-        post: Zomg<Post>,
-        content: String,
-        other_post: Zomg<Post>,
-    }
-);
+#[macro_export]
+#[allow(clippy::crate_in_macro_def)]
+macro_rules! zomg_impl {
+    // Done, generate model impl.
+    (@impl () -> { $name:ident $(($field:ident : $type:ty))* } [ $(($key:ident ; $foreign_key:ident : $model:ty))* ]) => {
+        impl $name {
+            $crate::paste::paste! {
+                pub async fn from_record(record: &[<$name Record>], conn: &mut Connection) -> QueryResult<Self> {
+                    // @TODO can these queries be more efficient? Since we know all the relations
+                    // ahead of time now, we may be able to just run one query.
+                    $(
+                        let $key: [<$model Record>] = crate::schema::[<$model:lower>]::table
+                            .find(record.$foreign_key)
+                            .first(conn)
+                            .await?;
+                        let $key = $model::from_record(&$key, conn).await?;
+                    )*
+                    Ok($name {
+                        $($key,)*
+                        $(
+                            $field: record.$field.clone(),
+                        )*
+                    })
+                }
+            }
+        }
+    };
 
-type Connection = ();
-type QueryResult<T> = Result<T, ()>;
+    // Put relation fields in a separate accumulator.
+    (@impl ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ]) => {
+        $crate::paste::paste! {
+            $crate::zomg_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ]);
+        }
+    };
 
-// Just a newtype, not part of macro.
-struct AvatarUrl(String);
+    // Iterate over struct fields.
+    (@impl ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ]) => {
+        $crate::zomg_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ]);
+    };
 
-struct Profile {
-    id: i32,
-    avatar: Option<AvatarUrl>,
-}
-
-struct ProfileRecord {
-    id: i32,
-    avatar: Option<AvatarUrl>,
-}
-
-struct NewProfileRecord<'a> {
-    avatar: Option<&'a AvatarUrl>,
-}
-
-struct User {
-    id: i32,
-    name: String,
-    profile: Profile,
-}
-
-struct UserRecord {
-    id: i32,
-    name: String,
-    profile_id: i32,
-}
-
-struct NewUserRecord<'a> {
-    name: &'a str,
-    profile_id: i32,
-}
-
-struct Post {
-    id: i32,
-    author: User,
-    content: String,
-}
-
-impl Post {
-    pub fn new_record(user_id: i32, content: &str) -> NewPostRecord {
-        todo!()
-    }
-
-    pub fn or_new_record<'a>(user: &'a User, content: &'a str) -> NewPostRecord<'a> {
-        todo!()
-    }
-
-    // @TODO this should possibly be a separate #[derive(FromRecord)]
-    pub async fn from_record(record: &PostRecord, conn: &mut Connection) -> Self {
-        todo!()
-    }
-
-    pub async fn from_records<'a>(
-        records: impl IntoIterator<Item = &'a PostRecord>,
-        conn: &'a mut Connection,
-    ) -> Vec<Self> {
-        todo!()
-    }
-}
-
-struct PostRecord {
-    id: i32,
-    user_id: i32,
-    content: String,
-}
-
-struct NewPostRecord<'a> {
-    user_id: i32,
-    content: &'a str,
-}
-
-impl<'a> NewPostRecord<'a> {
-    pub fn new(user_id: i32, content: &str) -> Self {
-        todo!()
-    }
-
-    pub async fn create(&self, conn: &mut Connection) -> QueryResult<PostRecord> {
-        todo!()
-    }
+    // Entrypoint.
+    ($name:ident ($($rest:tt)*)) => {
+        $crate::zomg_impl!(@impl ($($rest)*) -> { $name } []);
+    };
 }

@@ -77,16 +77,19 @@ macro_rules! zomg {
         zomg!(@model ( $($next)* ) -> { $($output)* ($field : $type) });
     };
 
-    (@@model $pub:vis $name:ident ($($fields:tt)*) ()) => {
+    (@@model $pub:vis $name:ident () ($(($field:ident : $type:ty))*)) => {
+        $pub struct $name {
+            $($field : $type),*
+        }
     };
 
-    (@@model $pub:vis $name:ident ($($fields:tt)+) ($field:ident : $type:ty , $($rest:tt)*)) => {
-        zomg!(@@model $pub $name ($($fields)* ($field : $type)) ($($rest)*));
+    (@@model $pub:vis $name:ident ($field:ident : $type:ty , $($rest:tt)*) ($($output:tt)+)) => {
+        zomg!(@@model $pub $name ($($rest)*) ($($output)* ($field : $type)));
     };
 
 
-    (@@model $pub:vis $name:ident () ($field:ident : $type:ty , $($rest:tt)*)) => {
-        zomg!(@@model $pub $name (($field : $type)) ($($rest)*));
+    (@@model $pub:vis $name:ident ($field:ident : $type:ty , $($rest:tt)*) ()) => {
+        zomg!(@@model $pub $name ($($rest)*) (($field : $type)));
     };
 
 
@@ -94,7 +97,7 @@ macro_rules! zomg {
     ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
         // zomg!(@model ( $($fields)* ) -> { $pub $name });
 
-        zomg!(@@model $pub $name () ($($fields)*));
+        zomg!(@@model $pub $name ($($fields)*) ());
 
         // zomg!(@record ( $($fields)* ) -> { $(#[$attr])* $pub $name });
     };

@@ -4,13 +4,15 @@
 
 trace_macros!(true);
 
+use defile::defile;
 use paste::paste;
 
 struct Zomg<T>(T);
 
 #[macro_export]
 macro_rules! zomg {
-    (@new_record () -> { $pub:vis $name:ident $(($field:ident: $type:ty))* }) => {
+    // Done, generate struct.
+    (@new_record () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
         paste! {
             $pub struct [<New $name Record>]<'a> {
                 $($field : $type),*
@@ -18,21 +20,27 @@ macro_rules! zomg {
         }
     };
 
-    (@new_record ( id : $type:ty, $($next:tt)* ) -> { $($output:tt)* }) => {
-        zomg!(@new_record ( $($next)* ) -> { $($output)* });
+    // Convert String fields to &'a str.
+    (@new_record ($field:ident : String $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        zomg!(@new_record ($($($rest)*)?) -> { $($output)* ($field : &'a str) });
     };
 
-    (@new_record ( $field:ident : String ) -> { $($output:tt)* }) => {
-        zomg!(@new_record () -> { $($output)* ($field : &'a str) });
+    // Remove id field.
+    (@new_record (id : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        zomg!(@new_record ($($($rest)*)?) -> { $($output)* });
     };
 
-    (@new_record ( $field:ident : $type:ty ) -> { $($output:tt)* }) => {
-        zomg!(@new_record () -> { $($output)* ($field : $type) });
+    // Iterate over struct fields.
+    (@new_record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        defile! {
+            zomg!(@@new_record ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        }
     };
 
-    (@new_record ( $field:ident : $type:ty, $($next:tt)* ) -> { $($output:tt)* }) => (::defile::defile! {
-        zomg!(@@new_record ( $(@$next)* ) -> { $($output)* ($field : $type) });
-    });
+    // NewRecord entrypoint.
+    (@new_record $pub:vis $name:ident ($($rest:tt)*)) => {
+        zomg!(@new_record ($($rest)*) -> { $pub $name });
+    };
 
     // Done, generate struct.
     (@record () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
@@ -41,14 +49,15 @@ macro_rules! zomg {
             $pub struct [<$name Record>] {
                 $($field : $type),*
             }
-    //     zomg!(@new_record ( $($field : $type),* ) -> { $pub $name });
         }
+
+        zomg!(@new_record $pub $name ($($field : $type),*));
     };
 
     // Replace relation fields with foreign key.
-    (@model ($field:ident : Zomg<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+    (@record ($field:ident : Zomg<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
         paste! {
-            zomg!(@model ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) });
+            zomg!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) });
         }
     };
 
@@ -58,8 +67,8 @@ macro_rules! zomg {
     };
 
     // Record entrypoint.
-    (@record $(#[$attr:meta])* $pub:vis $name:ident ($field:ident : $type:ty $(, $($rest:tt)*)?)) => {
-        zomg!(@record ($($($rest)*)?) -> { $(#[$attr])* $pub $name ($field : $type) });
+    (@record $(#[$attr:meta])* $pub:vis $name:ident ($($rest:tt)*)) => {
+        zomg!(@record ($($rest)*) -> { $(#[$attr])* $pub $name });
     };
 
     // Done, generate struct.
@@ -80,22 +89,21 @@ macro_rules! zomg {
     };
 
     // Model entrypoint.
-    (@model $pub:vis $name:ident ($field:ident : $type:ty $(, $($rest:tt)*)?)) => {
-        zomg!(@model ($($($rest)*)?) -> { $pub $name ($field : $type) });
+    (@model $pub:vis $name:ident ($($rest:tt)*)) => {
+        zomg!(@model ($($rest)*) -> { $pub $name });
     };
 
     // Main entrypoint.
     ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
         zomg!(@model $pub $name ($($fields)*));
         zomg!(@record $(#[$attr])* $pub $name ($($fields)*));
-
-        // zomg!(@record ( $($fields)* ) -> { $(#[$attr])* $pub $name });
     };
 }
 
 zomg!(
     #[derive(Debug)]
     pub struct Comment {
+        some_post: Zomg<Post>,
         id: i32,
         post: Zomg<Post>,
         content: String,

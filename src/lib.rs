@@ -83,15 +83,18 @@ macro_rules! zomg {
         }
     };
 
-    (@@model ($field:ident : $type:ty , $($rest:tt)*) -> { $($output:tt)* }) => {
-        zomg!(@@model ($($rest)*) -> { $($output)* ($field : $type) });
+    (@@model ($field:ident : Zomg<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        zomg!(@@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
-
-    (@@model $pub:vis $name:ident ($field:ident : $type:ty , $($rest:tt)*)) => {
-        zomg!(@@model ($($rest)*) -> { $pub $name ($field : $type) });
+    (@@model ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+        zomg!(@@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
+    // @model entrypoint.
+    (@@model $pub:vis $name:ident ($field:ident : $type:ty $(, $($rest:tt)*)?)) => {
+        zomg!(@@model ($($($rest)*)?) -> { $pub $name ($field : $type) });
+    };
 
     // Main entrypoint.
     ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
@@ -109,7 +112,7 @@ zomg!(
         id: i32,
         post: Zomg<Post>,
         content: String,
-        other_post: Zomg<Post>,
+        other_post: Zomg<Post>
     }
 );
 

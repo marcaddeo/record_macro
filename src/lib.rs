@@ -10,14 +10,14 @@ pub struct Related<T>(T);
 macro_rules! zomg {
     // Main entrypoint.
     ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
-        $crate::zomg_record!($(#[$attr])* $pub $name ($($fields)*));
-        $crate::zomg_model!($pub $name ($($fields)*));
-        $crate::zomg_impl!($name ($($fields)*));
+        $crate::internal_record!($(#[$attr])* $pub $name ($($fields)*));
+        $crate::internal_model!($pub $name ($($fields)*));
+        $crate::internal_impl!($name ($($fields)*));
     };
 }
 
 #[macro_export]
-macro_rules! zomg_record {
+macro_rules! internal_record {
     // Done, generate struct.
     (@record () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
         $crate::paste::paste! {
@@ -27,29 +27,29 @@ macro_rules! zomg_record {
             }
         }
 
-        $crate::zomg_new_record!($pub $name ($($field : $type),*));
+        $crate::internal_new_record!($pub $name ($($field : $type),*));
     };
 
     // Replace relation fields with foreign key.
     (@record ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
         $crate::paste::paste! {
-            $crate::zomg_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) });
+            $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) });
         }
     };
 
     // Iterate over struct fields.
     (@record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        $crate::zomg_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Entrypoint.
     ($(#[$attr:meta])* $pub:vis $name:ident ($($rest:tt)*)) => {
-        $crate::zomg_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $name });
+        $crate::internal_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $name });
     };
 }
 
 #[macro_export]
-macro_rules! zomg_new_record {
+macro_rules! internal_new_record {
     // Done, generate struct and generate new_record associated function for model.
     (@new_record () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
         $crate::paste::paste! {
@@ -74,32 +74,32 @@ macro_rules! zomg_new_record {
     // Convert String fields to &'a str.
     (@new_record ($field:ident : String $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
         $crate::defile::defile! {
-            $crate::zomg_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) });
+            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) });
         }
     };
 
     // Remove id field.
     (@new_record (id : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
         $crate::defile::defile! {
-            $crate::zomg_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* });
+            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* });
         }
     };
 
     // Iterate over struct fields.
     (@new_record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
         $crate::defile::defile! {
-            $crate::zomg_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) });
+            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) });
         }
     };
 
     // NewRecord entrypoint.
     ($pub:vis $name:ident ($($rest:tt)*)) => {
-        $crate::zomg_new_record!(@new_record ($($rest)*) -> { $pub $name });
+        $crate::internal_new_record!(@new_record ($($rest)*) -> { $pub $name });
     };
 }
 
 #[macro_export]
-macro_rules! zomg_model {
+macro_rules! internal_model {
     // Done, generate struct.
     (@model () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
         $pub struct $name {
@@ -109,23 +109,23 @@ macro_rules! zomg_model {
 
     // Strip out relation marker.
     (@model ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        $crate::zomg_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        $crate::internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Iterate over struct fields.
     (@model ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
-        $crate::zomg_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        $crate::internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Entrypoint.
     ($pub:vis $name:ident ($($rest:tt)*)) => {
-        $crate::zomg_model!(@model ($($rest)*) -> { $pub $name });
+        $crate::internal_model!(@model ($($rest)*) -> { $pub $name });
     };
 }
 
 #[macro_export]
 #[allow(clippy::crate_in_macro_def)]
-macro_rules! zomg_impl {
+macro_rules! internal_impl {
     // Done, generate model impl.
     (@impl () -> { $name:ident $(($field:ident : $type:ty))* } [ $(($key:ident ; $foreign_key:ident : $model:ty))* ]) => {
         impl $name {
@@ -154,17 +154,17 @@ macro_rules! zomg_impl {
     // Put relation fields in a separate accumulator.
     (@impl ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ]) => {
         $crate::paste::paste! {
-            $crate::zomg_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ]);
+            $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ]);
         }
     };
 
     // Iterate over struct fields.
     (@impl ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ]) => {
-        $crate::zomg_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ]);
+        $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ]);
     };
 
     // Entrypoint.
     ($name:ident ($($rest:tt)*)) => {
-        $crate::zomg_impl!(@impl ($($rest)*) -> { $name } []);
+        $crate::internal_impl!(@impl ($($rest)*) -> { $name } []);
     };
 }

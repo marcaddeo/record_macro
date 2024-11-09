@@ -12,11 +12,13 @@ pub struct Related<T>(T);
 /// # Example
 ///
 /// ```
+/// # #[macro_use] extern crate record_macro;
+/// # #[macro_use] extern crate defile;
+/// # #[macro_use] extern crate paste;
 /// # use diesel::prelude::*;
 /// # use diesel::sqlite::SqliteConnection;
 /// # use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 /// # use diesel_async::RunQueryDsl;
-/// # use lowboy::lowboy_record;
 /// // Connection type in Lowboy.
 /// pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 ///
@@ -49,6 +51,7 @@ pub struct Related<T>(T);
 ///     }
 /// }
 ///
+/// # fn main() {
 /// lowboy_record!(
 ///     #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable)]
 ///     #[diesel(table_name = crate::schema::user)]
@@ -83,6 +86,7 @@ pub struct Related<T>(T);
 ///         content: String,
 ///     }
 /// );
+/// # }
 /// ```
 #[macro_export]
 macro_rules! lowboy_record {

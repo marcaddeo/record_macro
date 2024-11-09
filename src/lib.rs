@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 pub extern crate defile;
 pub extern crate paste;
 
@@ -12,7 +9,7 @@ pub struct Related<T>(T);
 /// # Example
 ///
 /// ```
-/// # #[macro_use] extern crate record_macro;
+/// # #[macro_use] extern crate lowboy_record;
 /// # #[macro_use] extern crate defile;
 /// # #[macro_use] extern crate paste;
 /// use diesel::prelude::*;

@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::RunQueryDsl;
-use record_macro::lowboy_record;
+use lowboy_record::lowboy_record;
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 

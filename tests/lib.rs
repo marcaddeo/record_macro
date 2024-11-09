@@ -2,13 +2,13 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-// trace_macros!(true);
-
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::RunQueryDsl;
 use record_macro::lowboy_record;
+
+trace_macros!(false);
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 

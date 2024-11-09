@@ -115,7 +115,7 @@ macro_rules! internal_new_record {
     ) => {
         $crate::paste::paste! {
             // NewModelRecord
-            #[derive(Clone, Debug, Default, Insertable)]
+            #[derive(Clone, Debug, Default, diesel::Insertable)]
             #[diesel(table_name = crate::schema::[<$model:lower>])]
             #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
             $pub struct [<New $model Record>]<'a> {

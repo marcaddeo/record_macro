@@ -8,7 +8,7 @@ pub extern crate paste;
 pub struct Related<T>(T);
 
 #[macro_export]
-macro_rules! zomg {
+macro_rules! lowboy_record {
     // Main entrypoint.
     (
         $(#[$attr:meta])*
@@ -241,6 +241,7 @@ macro_rules! internal_model {
         -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
     ) => {
         $crate::paste::paste! {
+            #[derive(Debug, Clone)]
             #[doc = "A `" $model "` model"]
             $pub struct $model {
                 $($field : $type ,)*
@@ -315,11 +316,16 @@ macro_rules! internal_impl {
             $(
                 #[doc = "Load `" $many "` models into the `" [<$model>] "` object"]
                 pub async fn [<with_ $many>](self, conn: &mut Connection) -> QueryResult<Self> {
-                    let record: [<$model Record>] = self.into();
-                    let $many: Vec<[<$many_model Record>]> = [<$many_model Record>]::belonging_to(&record)
+                    let record: [<$model Record>] = self.clone().into();
+                    let records: Vec<[<$many_model Record>]> = [<$many_model Record>]::belonging_to(&record)
                         .select(crate::schema::[<$many_model:lower>]::table::all_columns())
                         .load(conn)
                         .await?;
+
+                    let mut $many = vec![];
+                    for record in &records {
+                        $many.push($many_model::from_record(record, conn).await?);
+                    }
 
                     Ok(Self {
                         $many,

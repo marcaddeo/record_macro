@@ -10,7 +10,12 @@ pub struct Related<T>(T);
 #[macro_export]
 macro_rules! zomg {
     // Main entrypoint.
-    ($(#[$attr:meta])* $pub:vis struct $model:ident { $($fields:tt)* } ) => {
+    (
+        $(#[$attr:meta])*
+        $pub:vis struct $model:ident {
+            $($fields:tt)*
+        }
+    ) => {
         $crate::internal_record!($(#[$attr])* $pub $model ($($fields)*));
         $crate::internal_model!($pub $model ($($fields)*));
         $crate::internal_impl!($model ($($fields)*));
@@ -21,7 +26,12 @@ macro_rules! zomg {
 #[doc(hidden)]
 macro_rules! internal_record {
     // Done, generate struct.
-    (@record () -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field:ident : $type:ty))* } [$(($from:ident : $from_type:ty))*] [$(($from_related: ident : $from_related_model:ty))*]) => {
+    (@record
+        ()
+        -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field:ident : $type:ty))* }
+        [$(($from:ident : $from_type:ty))*]
+        [$(($from_related: ident: $from_related_model:ty))*]
+    ) => {
         $crate::paste::paste! {
             $(#[$attr])*
             #[doc = "A `" $model "` record"]
@@ -49,21 +59,41 @@ macro_rules! internal_record {
     };
 
     // Strip out vec relation fields. These fields are "virtual" and used for one-to-many relations.
-    (@record ($field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?) -> { $($output:tt)* } [$($from:tt)*] [$($from_related:tt)*]) => {
+    (@record
+        ($field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [$($from:tt)*]
+        [$($from_related:tt)*]
+    ) => {
         $crate::paste::paste! {
             $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* } [$($from)*] [$($from_related)*]);
         }
     };
 
     // Replace relation fields with foreign key.
-    (@record ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* } [$($from:tt)*] [$($from_related:tt)*]) => {
+    (@record
+        ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [$($from:tt)*]
+        [$($from_related:tt)*]
+    ) => {
         $crate::paste::paste! {
             $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) } [$($from)*] [$($from_related)* ([<$field _id>] : $type)]);
         }
     };
 
     // Iterate over struct fields.
-    (@record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* } [$($from:tt)*] [$($from_related:tt)*]) => {
+    (@record
+        // Remove the first field/type from the list of Model fields to process into ModelRecord
+        // fields.
+        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        // Accumulator of ModelRecord output (attrs, visibility, model name, (record fields)).
+        -> { $($output:tt)* }
+        // Accumulator of non-related fields to copy 1-to-1 from Model to ModelRecord.
+        [$($from:tt)*]
+        // Accumulator of related fields to copy ids from related Model to ModelRecord.
+        [$($from_related:tt)*]
+    ) => {
         $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) } [$($from)* ($field : $type)] [$($from_related)*]);
     };
 
@@ -78,7 +108,11 @@ macro_rules! internal_record {
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! internal_new_record {
     // Done, generate struct and generate new_record associated function for model.
-    (@new_record () -> { $pub:vis $model:ident $(($field:ident : $type:ty))* } [ $(($option:ident : $option_type:ty))* ]) => {
+    (@new_record
+        ()
+        -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
+        [ $(($option:ident : $option_type:ty))* ]
+    ) => {
         $crate::paste::paste! {
             // NewModelRecord
             #[derive(Clone, Debug, Default, Insertable)]
@@ -134,35 +168,59 @@ macro_rules! internal_new_record {
     // @TODO handle other owned types.
 
     // Convert Option<String> fields to Option<&'a str>, and put them in the optionial accumulator.
-    (@new_record ($field:ident : Option<String> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($optional:tt)* ]) => {
+    (@new_record
+        ($field:ident : Option<String> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($optional:tt)* ]
+    ) => {
         $crate::defile::defile! {
             $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<&'a str>) ]);
         }
     };
 
     // Put optional fields in a separate optional accumulator.
-    (@new_record ($field:ident : Option<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($optional:tt)* ]) => {
+    (@new_record
+        ($field:ident : Option<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($optional:tt)* ]
+    ) => {
         $crate::defile::defile! {
             $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<$type>) ]);
         }
     };
 
     // Convert String fields to &'a str.
-    (@new_record ($field:ident : String $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($optional:tt)* ]) => {
+    (@new_record
+        ($field:ident : String $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($optional:tt)* ]
+    ) => {
         $crate::defile::defile! {
             $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) } [ $($optional)* ]);
         }
     };
 
     // Remove id field.
-    (@new_record (id : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($optional:tt)* ]) => {
+    (@new_record
+        (id : $type:ty $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($optional:tt)* ]
+    ) => {
         $crate::defile::defile! {
             $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ]);
         }
     };
 
     // Iterate over struct fields.
-    (@new_record ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($optional:tt)* ]) => {
+    (@new_record
+        // Remove the first field/type from the list of Model fields to process into NewModelRecord
+        // fields.
+        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        // Accumulator of NewModelRecord output (attrs, visibility, model name, (record fields)).
+        -> { $($output:tt)* }
+        // Accumulator of optional NewModelRecord fields.
+        [ $($optional:tt)* ]
+    ) => {
         $crate::defile::defile! {
             $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) } [ $($optional)* ]);
         }
@@ -178,7 +236,10 @@ macro_rules! internal_new_record {
 #[doc(hidden)]
 macro_rules! internal_model {
     // Done, generate struct.
-    (@model () -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }) => {
+    (@model
+        ()
+        -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
+    ) => {
         $crate::paste::paste! {
             #[doc = "A `" $model "` model"]
             $pub struct $model {
@@ -188,12 +249,20 @@ macro_rules! internal_model {
     };
 
     // Strip out relation marker.
-    (@model ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+    (@model
+        ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+    ) => {
         $crate::internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Iterate over struct fields.
-    (@model ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* }) => {
+    (@model
+        // Remove the first field/type from the list of Model fields to process into Model fields.
+        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        // Accumulator of Model output (attrs, visibility, model name, (model fields)).
+        -> { $($output:tt)* }
+    ) => {
         $crate::internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
@@ -208,7 +277,12 @@ macro_rules! internal_model {
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! internal_impl {
     // Done, generate Model impl.
-    (@impl () -> { $model:ident $(($field:ident : $type:ty))* } [ $(($key:ident ; $foreign_key:ident : $foreign_model:ty))* ] [ $(($many:ident : $many_model:ty))* ]) => {
+    (@impl
+        ()
+        -> { $model:ident $(($field:ident : $type:ty))* }
+        [ $(($key:ident ; $foreign_key:ident : $foreign_model:ty))* ]
+        [ $(($many:ident : $many_model:ty))* ]
+    ) => {
         impl $model {
             $crate::paste::paste! {
                 #[doc = "Create a `" $model "` object from a `" [<$model Record>] "`"]
@@ -259,21 +333,40 @@ macro_rules! internal_impl {
     };
 
     // Put vec relation fields in a separate one-to-many accumulator.
-    (@impl ($field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ] [ $($many:tt)* ]) => {
+    (@impl
+        ($field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($relations:tt)* ]
+        [ $($many:tt)* ]
+    ) => {
         $crate::paste::paste! {
             $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($field : $type) ]);
         }
     };
 
     // Put relation fields in a separate accumulator.
-    (@impl ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ] [ $($many:tt)* ]) => {
+    (@impl
+        ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($relations:tt)* ]
+        [ $($many:tt)* ]
+    ) => {
         $crate::paste::paste! {
             $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ] [ $($many)* ]);
         }
     };
 
     // Iterate over struct fields.
-    (@impl ($field:ident : $type:ty $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($relations:tt)* ] [ $($many:tt)* ]) => {
+    (@impl
+        // Remove the first field/type from the list of Model fields to process into Model fields.
+        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        // Accumulator of Impl output (model name, (model fields)).
+        -> { $($output:tt)* }
+        // Accumulator of model children.
+        [ $($relations:tt)* ]
+        // Accumulator of model child collections.
+        [ $($many:tt)* ]
+    ) => {
         $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ] [ $($many)* ]);
     };
 

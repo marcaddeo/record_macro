@@ -24,10 +24,12 @@ macro_rules! internal_record {
     (@record () -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field:ident : $type:ty))* } [$(($from:ident : $from_type:ty))*] [$(($from_related: ident : $from_related_model:ty))*]) => {
         $crate::paste::paste! {
             $(#[$attr])*
+            #[doc = "A `" $model "` record"]
             $pub struct [<$model Record>] {
-                $($field : $type),*
+                $($field : $type ,)*
             }
 
+            // impl From<Model> for <ModelRecord>
             #[doc = "Convert from a `" $model "` model into `" [<$model Record>] "`"]
             impl From<$model> for [<$model Record>] {
                 fn from(value: $model) -> Self {
@@ -36,14 +38,14 @@ macro_rules! internal_record {
                 )*
 
                     Self {
-                        $($from : value.$from,)*
-                        $($from_related,)*
+                        $($from : value.$from ,)*
+                        $($from_related ,)*
                     }
                 }
             }
         }
 
-        $crate::internal_new_record!($pub $model ($($field : $type),*));
+        $crate::internal_new_record!($pub $model ($($field : $type ,)*));
     };
 
     // Strip out vec relation fields. These fields are "virtual" and used for one-to-many relations.
@@ -130,8 +132,6 @@ macro_rules! internal_new_record {
     };
 
     // @TODO handle other owned types.
-    // @TODO seems like the Option<OwnedType> is going to be repetitive, maybe see if twe can get
-    // around that?
 
     // Convert Option<String> fields to Option<&'a str>, and put them in the optionial accumulator.
     (@new_record ($field:ident : Option<String> $(, $($rest:tt)*)?) -> { $($output:tt)* } [ $($optional:tt)* ]) => {
@@ -182,7 +182,7 @@ macro_rules! internal_model {
         $crate::paste::paste! {
             #[doc = "A `" $model "` model"]
             $pub struct $model {
-                $($field : $type),*
+                $($field : $type ,)*
             }
         }
     };
@@ -212,7 +212,7 @@ macro_rules! internal_impl {
         impl $model {
             $crate::paste::paste! {
                 #[doc = "Create a `" $model "` object from a `" [<$model Record>] "`"]
-                #[doc = "This will also load the models child models, excluding one-to-many children."]
+                #[doc = "This will also load child models, excluding one-to-many children."]
                 pub async fn from_record(record: &[<$model Record>], conn: &mut Connection) -> QueryResult<Self> {
                     $(
                         let $key: [<$foreign_model Record>] = crate::schema::[<$foreign_model:lower>]::table

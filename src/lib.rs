@@ -4,15 +4,16 @@
 pub extern crate defile;
 pub extern crate paste;
 
+/// A marker to designate a field as being a related model.
 pub struct Related<T>(T);
 
 #[macro_export]
 macro_rules! zomg {
     // Main entrypoint.
-    ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
-        $crate::internal_record!($(#[$attr])* $pub $name ($($fields)*));
-        $crate::internal_model!($pub $name ($($fields)*));
-        $crate::internal_impl!($name ($($fields)*));
+    ($(#[$attr:meta])* $pub:vis struct $model:ident { $($fields:tt)* } ) => {
+        $crate::internal_record!($(#[$attr])* $pub $model ($($fields)*));
+        $crate::internal_model!($pub $model ($($fields)*));
+        $crate::internal_impl!($model ($($fields)*));
     };
 }
 
@@ -20,15 +21,16 @@ macro_rules! zomg {
 #[doc(hidden)]
 macro_rules! internal_record {
     // Done, generate struct.
-    (@record () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident : $type:ty))* } [$(($from:ident : $from_type:ty))*] [$(($from_related: ident : $from_related_model:ty))*]) => {
+    (@record () -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field:ident : $type:ty))* } [$(($from:ident : $from_type:ty))*] [$(($from_related: ident : $from_related_model:ty))*]) => {
         $crate::paste::paste! {
             $(#[$attr])*
-            $pub struct [<$name Record>] {
+            $pub struct [<$model Record>] {
                 $($field : $type),*
             }
 
-            impl From<$name> for [<$name Record>] {
-                fn from(value: $name) -> Self {
+            #[doc = "Convert from a `" $model "` model into `" [<$model Record>] "`"]
+            impl From<$model> for [<$model Record>] {
+                fn from(value: $model) -> Self {
                 $(
                     let $from_related = value.[<$from_related_model:lower>].id;
                 )*
@@ -41,7 +43,7 @@ macro_rules! internal_record {
             }
         }
 
-        $crate::internal_new_record!($pub $name ($($field : $type),*));
+        $crate::internal_new_record!($pub $model ($($field : $type),*));
     };
 
     // Strip out vec relation fields. These fields are "virtual" and used for one-to-many relations.
@@ -64,8 +66,8 @@ macro_rules! internal_record {
     };
 
     // Entrypoint.
-    ($(#[$attr:meta])* $pub:vis $name:ident ($($rest:tt)*)) => {
-        $crate::internal_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $name } [] []);
+    ($(#[$attr:meta])* $pub:vis $model:ident ($($rest:tt)*)) => {
+        $crate::internal_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $model } [] []);
     };
 }
 
@@ -74,21 +76,21 @@ macro_rules! internal_record {
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! internal_new_record {
     // Done, generate struct and generate new_record associated function for model.
-    (@new_record () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* } [ $(($option:ident : $option_type:ty))* ]) => {
+    (@new_record () -> { $pub:vis $model:ident $(($field:ident : $type:ty))* } [ $(($option:ident : $option_type:ty))* ]) => {
         $crate::paste::paste! {
             // NewModelRecord
             #[derive(Clone, Debug, Default, Insertable)]
-            #[diesel(table_name = crate::schema::[<$name:lower>])]
+            #[diesel(table_name = crate::schema::[<$model:lower>])]
             #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-            $pub struct [<New $name Record>]<'a> {
+            $pub struct [<New $model Record>]<'a> {
                 $($field : $type ,)*
                 $($option : $option_type ,)*
             }
 
-            impl<'a> [<New $name Record>]<'a> {
+            impl<'a> [<New $model Record>]<'a> {
                 // NewModelRecord::new
-                #[doc = "Create a new `" [<New $name Record>] "` object."]
-                pub fn new($($field : $type ,)*) -> [<New $name Record>]<'a> {
+                #[doc = "Create a new `" [<New $model Record>] "` object"]
+                pub fn new($($field : $type ,)*) -> [<New $model Record>]<'a> {
                     Self {
                         $($field ,)*
                         $($option : None ,)*
@@ -97,7 +99,7 @@ macro_rules! internal_new_record {
 
             $(
                 // NewRecord::with_$option
-                #[doc = "Add the optional `" $option "` field to the `" [<New $name Record>] "` object."]
+                #[doc = "Add the optional `" $option "` field to the `" [<New $model Record>] "` object"]
                  pub fn [<with_ $option>](self, $option : $option_type) -> Self {
                     Self {
                         $option,
@@ -107,21 +109,21 @@ macro_rules! internal_new_record {
             )*
 
                 // NewModelRecord::create
-                #[doc = "Create a new `" [<$name:lower>] "` in the database."]
-                pub async fn create(&self, conn: &mut Connection) -> QueryResult<[<$name Record>]> {
-                    diesel::insert_into(crate::schema::[<$name:lower>]::table)
+                #[doc = "Create a new `" [<$model:lower>] "` in the database"]
+                pub async fn create(&self, conn: &mut Connection) -> QueryResult<[<$model Record>]> {
+                    diesel::insert_into(crate::schema::[<$model:lower>]::table)
                         .values(self)
-                        .returning(crate::schema::[<$name:lower>]::table::all_columns())
+                        .returning(crate::schema::[<$model:lower>]::table::all_columns())
                         .get_result(conn)
                         .await
                 }
             }
 
-            impl $name {
+            impl $model {
                 // Model::new_record
-                #[doc = "Create a new `" [<New $name Record>] "` object."]
-                pub fn new_record<'a>($($field : $type ,)*) -> [<New $name Record>]<'a> {
-                    [<New $name Record>]::new($($field ,)*)
+                #[doc = "Create a new `" [<New $model Record>] "` object"]
+                pub fn new_record<'a>($($field : $type ,)*) -> [<New $model Record>]<'a> {
+                    [<New $model Record>]::new($($field ,)*)
                 }
             }
         }
@@ -166,9 +168,9 @@ macro_rules! internal_new_record {
         }
     };
 
-    // NewRecord entrypoint.
-    ($pub:vis $name:ident ($($rest:tt)*)) => {
-        $crate::internal_new_record!(@new_record ($($rest)*) -> { $pub $name } []);
+    // Entrypoint.
+    ($pub:vis $model:ident ($($rest:tt)*)) => {
+        $crate::internal_new_record!(@new_record ($($rest)*) -> { $pub $model } []);
     };
 }
 
@@ -176,9 +178,12 @@ macro_rules! internal_new_record {
 #[doc(hidden)]
 macro_rules! internal_model {
     // Done, generate struct.
-    (@model () -> { $pub:vis $name:ident $(($field:ident : $type:ty))* }) => {
-        $pub struct $name {
-            $($field : $type),*
+    (@model () -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }) => {
+        $crate::paste::paste! {
+            #[doc = "A `" $model "` model"]
+            $pub struct $model {
+                $($field : $type),*
+            }
         }
     };
 
@@ -193,8 +198,8 @@ macro_rules! internal_model {
     };
 
     // Entrypoint.
-    ($pub:vis $name:ident ($($rest:tt)*)) => {
-        $crate::internal_model!(@model ($($rest)*) -> { $pub $name });
+    ($pub:vis $model:ident ($($rest:tt)*)) => {
+        $crate::internal_model!(@model ($($rest)*) -> { $pub $model });
     };
 }
 
@@ -202,27 +207,27 @@ macro_rules! internal_model {
 #[doc(hidden)]
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! internal_impl {
-    // Done, generate model impl.
-    // @TODO i can probably change $name -> $model everywhere to make this a bit clearer. And get
-    // rid of the $model:ty here since i can just use the $model (name).
-    (@impl () -> { $name:ident $(($field:ident : $type:ty))* } [ $(($key:ident ; $foreign_key:ident : $model:ty))* ] [ $(($many:ident : $many_model:ty))* ]) => {
-        impl $name {
+    // Done, generate Model impl.
+    (@impl () -> { $model:ident $(($field:ident : $type:ty))* } [ $(($key:ident ; $foreign_key:ident : $foreign_model:ty))* ] [ $(($many:ident : $many_model:ty))* ]) => {
+        impl $model {
             $crate::paste::paste! {
-                pub async fn from_record(record: &[<$name Record>], conn: &mut Connection) -> QueryResult<Self> {
+                #[doc = "Create a `" $model "` object from a `" [<$model Record>] "`"]
+                #[doc = "This will also load the models child models, excluding one-to-many children."]
+                pub async fn from_record(record: &[<$model Record>], conn: &mut Connection) -> QueryResult<Self> {
                     $(
-                        let $key: [<$model Record>] = crate::schema::[<$model:lower>]::table
+                        let $key: [<$foreign_model Record>] = crate::schema::[<$foreign_model:lower>]::table
                             .find(record.$foreign_key)
                             .first(conn)
                             .await?;
-                        let $key = $model::from_record(&$key, conn).await?;
+                        let $key = $foreign_model::from_record(&$key, conn).await?;
                     )*
 
-                    Ok($name {
-                        $($key,)*
+                    Ok($model {
+                        $($key ,)*
                         $(
                             $field : record.$field.clone(),
                         )*
-                        $($many : vec![],)*
+                        $($many : vec![] ,)*
                     })
                 }
 
@@ -234,14 +239,18 @@ macro_rules! internal_impl {
                 // }
 
             $(
+                #[doc = "Load `" $many "` models into the `" [<$model>] "` object"]
                 pub async fn [<with_ $many>](self, conn: &mut Connection) -> QueryResult<Self> {
-                    let record: [<$name Record>] = self.into();
+                    let record: [<$model Record>] = self.into();
                     let $many: Vec<[<$many_model Record>]> = [<$many_model Record>]::belonging_to(&record)
                         .select(crate::schema::[<$many_model:lower>]::table::all_columns())
                         .load(conn)
                         .await?;
 
-                    todo!()
+                    Ok(Self {
+                        $many,
+                        ..self
+                    })
                 }
             )*
 
@@ -269,7 +278,7 @@ macro_rules! internal_impl {
     };
 
     // Entrypoint.
-    ($name:ident ($($rest:tt)*)) => {
-        $crate::internal_impl!(@impl ($($rest)*) -> { $name } [] []);
+    ($model:ident ($($rest:tt)*)) => {
+        $crate::internal_impl!(@impl ($($rest)*) -> { $model } [] []);
     };
 }
